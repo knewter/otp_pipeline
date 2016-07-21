@@ -15,17 +15,16 @@ defmodule RssWatcher.FeedWatcher do
 
   def handle_info(:fetch, state={url, last_time}) do
     :timer.send_after(1_000, :fetch)
-    {:ok, feed} = fetch_feed(url)
-    {:ok, entries} = feed.entries |> parse_times
-    {:ok, new_entries} = entries |> filter_entries(last_time)
-    case new_entries do
-      [] ->
+    with {:ok, feed} <- fetch_feed(url),
+         {:ok, entries} <- feed.entries |> parse_times,
+         {:ok, new=[newest|_]} <- entries |> filter_entries(last_time) do
+      for entry <- new do
+        FeedEntryHandler.Handler.handle(entry)
+      end
+      {:noreply, {url, newest.updated}}
+    else
+      _ ->
         {:noreply, state}
-      new = [newest | _] ->
-        for entry <- new do
-          FeedEntryHandler.Handler.handle(entry)
-        end
-        {:noreply, {url, newest.updated}}
     end
   end
 
